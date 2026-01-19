@@ -30,6 +30,8 @@ export default function Dashboard() {
     const [toDate, setToDate] = useState("");
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [dataFetched, setDataFetched] = useState(false);
 
 
     const MAX_DAYS = 40;
@@ -110,18 +112,20 @@ export default function Dashboard() {
             return;
         }
 
-        if (!isDateRangeValid(fromDate, toDate)) {
-            alert("Date range must not be more than 40 days.");
-            return;
-        }
-
         if (!fromDate || !toDate) {
-            alert("Please select From Date and To Date");
+            setError("Please select From Date and To Date");
             return;
         }
 
+        if (!isDateRangeValid(fromDate, toDate)) {
+            setError("Date range must not be more than 40 days");
+            return;
+        }
+
+        setError("");
         setLoading(true);
         setData(null);
+        setDataFetched(false);
 
         try {
             const res = await fetch(
@@ -146,14 +150,30 @@ export default function Dashboard() {
                 return;
             }
 
+            if (!res.ok) {
+                setError(`Failed to fetch data. Status: ${res.status}`);
+                return;
+            }
+
             const result = await res.json();
+
+            if (!result || Object.keys(result).length === 0) {
+                setError("No data found for the selected client and date range");
+                setDataFetched(true);
+                return;
+            }
+
             setData(result);
+            setDataFetched(true);
         } catch (err) {
             console.error("Fetch failed:", err);
+            setError("Failed to fetch data. Please try again.");
         } finally {
             setLoading(false);
         }
     };
+
+    const clearError = () => setError("");
 
 
     if (!authorized) {
@@ -177,12 +197,12 @@ export default function Dashboard() {
 
                 <div className="filter-group">
                     <label>From Date</label>
-                    <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+                    <input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); clearError(); }} />
                 </div>
 
                 <div className="filter-group">
                     <label>To Date</label>
-                    <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                    <input type="date" value={toDate} onChange={(e) => { setToDate(e.target.value); clearError(); }} />
                 </div>
 
                 <button className="fetch-btn" onClick={fetchData}>
@@ -190,14 +210,22 @@ export default function Dashboard() {
                 </button>
             </div>
 
+            {error && <div className="error-message">{error}</div>}
+
             {/* DASHBOARD DATA */}
-            {data && (
+            {dataFetched && !data?.services_count && !error && (
+                <div className="no-data-message">
+                    No data available for the selected client and date range
+                </div>
+            )}
+
+            {data && data.services_count && (
                 <>
                     <div className="kpi-grid">
-                        <Kpi title="Total Count" value={data.total_count} />
-                        <Kpi title="Verified" value={data.verified} />
-                        <Kpi title="Not Verified" value={data.not_verified} />
-                        <Kpi title="Incomplete" value={data.incomplete} />
+                        <Kpi title="Total Count" value={data.total_count ?? 0} />
+                        <Kpi title="Verified" value={data.verified ?? 0} />
+                        <Kpi title="Not Verified" value={data.not_verified ?? 0} />
+                        <Kpi title="Incomplete" value={data.incomplete ?? 0} />
                     </div>
 
                     <div className="charts-grid">
@@ -205,11 +233,11 @@ export default function Dashboard() {
                             <h3>Services Distribution</h3>
                             <Doughnut
                                 data={{
-                                    labels: Object.keys(data.services_count),
+                                    labels: Object.keys(data.services_count || {}),
                                     datasets: [
                                         {
-                                            data: Object.values(data.services_count).map(
-                                                (s) => s.total || 0
+                                            data: Object.values(data.services_count || {}).map(
+                                                (s) => s?.total || 0
                                             ),
                                             backgroundColor: [
                                                 "#43cea2",
@@ -234,9 +262,9 @@ export default function Dashboard() {
                                         {
                                             label: "Count",
                                             data: [
-                                                data.verified,
-                                                data.not_verified,
-                                                data.incomplete,
+                                                data.verified ?? 0,
+                                                data.not_verified ?? 0,
+                                                data.incomplete ?? 0,
                                             ],
                                             backgroundColor: "#43cea2",
                                         },
