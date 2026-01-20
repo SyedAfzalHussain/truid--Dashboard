@@ -14,7 +14,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const res = await fetch("https://askari-test.truid.ai/rest-auth/login/", {
+      const res = await fetch("https://trueidmapp.askaribank.com.pk/rest-auth/login/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

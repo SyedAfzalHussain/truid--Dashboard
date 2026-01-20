@@ -83,7 +83,7 @@ export default function Dashboard() {
     //     }
 
     //     // Minimal token validation using API
-    //     fetch("https://askari-test.truid.ai/services-count/", {
+    //     fetch("https://trueidmapp.askaribank.com.pk/services-count/", {
     //         method: "POST",
     //         headers: {
     //             "Content-Type": "application/json",
@@ -129,7 +129,7 @@ export default function Dashboard() {
 
         try {
             const res = await fetch(
-                "https://askari-test.truid.ai/services-count/",
+                "https://trueidmapp.askaribank.com.pk/services-count/",
                 {
                     method: "POST",
                     headers: {
@@ -212,8 +212,31 @@ export default function Dashboard() {
 
             {error && <div className="error-message">{error}</div>}
 
+            {/* SKELETON LOADER */}
+            {loading && (
+                <>
+                    <div className="kpi-grid">
+                        {[1, 2, 3, 4].map((i) => (
+                            <div key={i} className="kpi-card">
+                                <div className="skeleton skeleton-kpi"></div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="charts-grid">
+                        <div className="chart-card">
+                            <div className="skeleton skeleton-title"></div>
+                            <div className="skeleton skeleton-chart"></div>
+                        </div>
+                        <div className="chart-card">
+                            <div className="skeleton skeleton-title"></div>
+                            <div className="skeleton skeleton-chart"></div>
+                        </div>
+                    </div>
+                </>
+            )}
+
             {/* DASHBOARD DATA */}
-            {dataFetched && !data?.services_count && !error && (
+            {!loading && dataFetched && !data?.services_count && !error && (
                 <div className="no-data-message">
                     No data available for the selected client and date range
                 </div>
