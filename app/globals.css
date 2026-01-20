@@ -20,6 +20,7 @@ body {
 
 /* Card */
 .login-card {
+  margin: 3%;
   width: 100%;
   max-width: 380px;
   background: rgba(255, 255, 255, 0.15);
@@ -319,4 +320,117 @@ body {
   height: 24px;
   width: 150px;
   margin-bottom: 20px;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .dashboard-wrapper {
+    padding: 20px 15px;
+  }
+
+  .dashboard-title {
+    font-size: 24px;
+    margin-bottom: 20px;
+  }
+
+  .filter-card {
+    grid-template-columns: 1fr;
+    gap: 15px;
+    padding: 15px;
+  }
+
+  .fetch-btn {
+    width: 100%;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 25px;
+  }
+
+  .kpi-card {
+    padding: 15px;
+  }
+
+  .kpi-card h4 {
+    font-size: 12px;
+  }
+
+  .kpi-card p,
+  .kpi-card strong {
+    font-size: 20px;
+  }
+
+  .kpi-card span {
+    font-size: 12px;
+  }
+
+  .charts-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .chart-card {
+    padding: 15px;
+  }
+
+  .chart-card h3 {
+    font-size: 16px;
+    margin-bottom: 15px;
+  }
+
+  .login-card {
+    padding: 30px 25px;
+    margin: 20px;
+  }
+
+  .error-message {
+    font-size: 13px;
+    padding: 10px 15px;
+  }
+
+  .no-data-message {
+    padding: 30px 15px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-wrapper {
+    padding: 15px 10px;
+  }
+
+  .dashboard-title {
+    font-size: 20px;
+  }
+
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-card {
+    padding: 12px;
+  }
+
+  .filter-card {
+    padding: 12px;
+  }
+
+  .chart-card {
+    padding: 12px;
+  }
+
+  .login-card {
+    padding: 25px 20px;
+    margin: 15px;
+  }
+
+  .login-card h2 {
+    font-size: 22px;
+  }
+
+  .login-card p {
+    font-size: 13px;
+  }
 }

@@ -273,6 +273,23 @@ export default function Dashboard() {
                                         },
                                     ],
                                 }}
+                                options={{
+                                    responsive: true,
+                                    maintainAspectRatio: true,
+                                    plugins: {
+                                        legend: {
+                                            display: true,
+                                            position: "bottom",
+                                            labels: {
+                                                color: "white",
+                                                font: {
+                                                    size: 12
+                                                },
+                                                padding: 10
+                                            }
+                                        }
+                                    }
+                                }}
                             />
                         </div>
 
@@ -292,6 +309,44 @@ export default function Dashboard() {
                                             backgroundColor: "#43cea2",
                                         },
                                     ],
+                                }}
+                                options={{
+                                    responsive: true,
+                                    maintainAspectRatio: true,
+                                    plugins: {
+                                        legend: {
+                                            labels: {
+                                                color: "white",
+                                                font: {
+                                                    size: 12
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        y: {
+                                            ticks: {
+                                                color: "rgba(255, 255, 255, 0.8)",
+                                                font: {
+                                                    size: 11
+                                                }
+                                            },
+                                            grid: {
+                                                color: "rgba(255, 255, 255, 0.1)"
+                                            }
+                                        },
+                                        x: {
+                                            ticks: {
+                                                color: "rgba(255, 255, 255, 0.8)",
+                                                font: {
+                                                    size: 11
+                                                }
+                                            },
+                                            grid: {
+                                                color: "rgba(255, 255, 255, 0.1)"
+                                            }
+                                        }
+                                    }
                                 }}
                             />
                         </div>
