@@ -109,7 +109,7 @@ export default function Dashboard() {
     //     });
     // }, [router]);
 
-    /** 📊 FETCH DASHBOARD DATA FOR ALL CLIENTS */
+    /** 📊 FETCH DASHBOARD DATA FOR ALL CLIENTS IN PARALLEL */
     const fetchData = async () => {
         const token = getToken();
         if (!token) {
@@ -130,16 +130,15 @@ export default function Dashboard() {
         setError("");
         setFetchingDisabled(true);
 
-        // Reset previous data
+        // Reset previous data and set all clients to loading
         setClientsData({ 1: null, 2: null, 3: null });
+        setClientsLoading({ 1: true, 2: true, 3: true });
 
         const clients = ["1", "2", "3"];
 
-        // Fetch data for each client sequentially
-        for (const clientId of clients) {
-            try {
-                setClientsLoading(prev => ({ ...prev, [clientId]: true }));
-
+        // Fetch data for all clients in parallel using Promise.all
+        try {
+            const fetchPromises = clients.map(async (clientId) => {
                 const res = await fetch(
                     "https://trueidmapp.askaribank.com.pk/services-count/",
                     {
@@ -159,25 +158,33 @@ export default function Dashboard() {
                 if (res.status === 401 || res.status === 403) {
                     document.cookie = "userKey=; Max-Age=0; path=/";
                     router.replace("/");
-                    return;
+                    return null;
                 }
 
                 if (!res.ok) {
                     console.error(`Failed to fetch data for client ${clientId}. Status: ${res.status}`);
-                    setClientsLoading(prev => ({ ...prev, [clientId]: false }));
-                    continue;
+                    return null;
                 }
 
                 const result = await res.json();
+                return { clientId, data: result };
+            });
 
-                // Update data for this client
-                setClientsData(prev => ({ ...prev, [clientId]: result }));
-                setClientsLoading(prev => ({ ...prev, [clientId]: false }));
+            const results = await Promise.all(fetchPromises);
 
-            } catch (err) {
-                console.error(`Fetch failed for client ${clientId}:`, err);
-                setClientsLoading(prev => ({ ...prev, [clientId]: false }));
-            }
+            // Update all clients data at once
+            const newClientsData = { 1: null, 2: null, 3: null };
+            results.forEach(result => {
+                if (result && result.clientId) {
+                    newClientsData[result.clientId] = result.data;
+                }
+            });
+            setClientsData(newClientsData);
+            setClientsLoading({ 1: false, 2: false, 3: false });
+
+        } catch (err) {
+            console.error("Fetch failed:", err);
+            setClientsLoading({ 1: false, 2: false, 3: false });
         }
 
         setFetchingDisabled(false);
@@ -185,6 +192,63 @@ export default function Dashboard() {
 
     const clearError = () => setError("");
 
+    /** 📊 AGGREGATE DATA BY SERVICE TYPE */
+    const getServiceAggregatedData = () => {
+        const servicesMap = {};
+
+        [1, 2, 3].forEach((clientId) => {
+            const clientData = clientsData[clientId];
+            if (!clientData?.services_count) return;
+
+            Object.entries(clientData.services_count).forEach(([serviceName, serviceData]) => {
+                if (!servicesMap[serviceName]) {
+                    servicesMap[serviceName] = {
+                        total: 0,
+                        verified: 0,
+                        notVerified: 0,
+                        clients: {}
+                    };
+                }
+
+                const verified = serviceData?.verfied ?? serviceData?.verified ?? 0;
+                const notVerified = serviceData?.not_verified ?? 0;
+                const total = serviceData?.total ?? 0;
+
+                servicesMap[serviceName].total += total;
+                servicesMap[serviceName].verified += verified;
+                servicesMap[serviceName].notVerified += notVerified;
+                servicesMap[serviceName].clients[clientId] = {
+                    verified,
+                    notVerified,
+                    total
+                };
+            });
+        });
+
+        return servicesMap;
+    };
+
+    /** 📊 GET OVERALL TOTALS */
+    const getOverallTotals = () => {
+        let totalCount = 0;
+        let verifiedCount = 0;
+        let notVerifiedCount = 0;
+
+        [1, 2, 3].forEach((clientId) => {
+            const clientData = clientsData[clientId];
+            if (clientData) {
+                totalCount += clientData.total_count || 0;
+                verifiedCount += clientData.verfied || clientData.verified || 0;
+                notVerifiedCount += clientData.not_verified || 0;
+            }
+        });
+
+        return { totalCount, verifiedCount, notVerifiedCount };
+    };
+
+    const hasAnyData = () => {
+        return clientsData[1]?.services_count || clientsData[2]?.services_count || clientsData[3]?.services_count;
+    };
 
     if (!authorized) {
         return null; // prevents UI flash
@@ -219,161 +283,54 @@ export default function Dashboard() {
 
             {error && <div className="error-message">{error}</div>}
 
-            {/* CLIENT SECTIONS */}
-            {[1, 2, 3].map((clientId) => (
-                <div key={clientId} className="client-section">
-                    <h2 className="client-title">Client {clientId}</h2>
-
-                    {/* SKELETON LOADER FOR THIS CLIENT */}
-                    {clientsLoading[clientId] && (
-                        <>
-                            <div className="kpi-grid">
-                                {[1, 2, 3, 4].map((i) => (
-                                    <div key={i} className="kpi-card">
-                                        <div className="skeleton skeleton-kpi"></div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="charts-grid">
-                                <div className="chart-card">
-                                    <div className="skeleton skeleton-title"></div>
-                                    <div className="skeleton skeleton-chart"></div>
-                                </div>
-                                <div className="chart-card">
-                                    <div className="skeleton skeleton-title"></div>
-                                    <div className="skeleton skeleton-chart"></div>
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {/* DATA FOR THIS CLIENT */}
-                    {!clientsLoading[clientId] && clientsData[clientId] && (
-                        <>
-                            {clientsData[clientId].services_count ? (
-                                <>
-                                    <div className="kpi-grid">
-                                        <Kpi title="Total Count" value={clientsData[clientId].total_count ?? 0} />
-                                        <Kpi title="Verified" value={clientsData[clientId].verfied ?? clientsData[clientId].verified ?? 0} />
-                                        <Kpi title="Not Verified" value={clientsData[clientId].not_verified ?? 0} /> 
-                                    </div>
-
-                                    <div className="charts-grid">
-                                        <div className="chart-card services-card">
-                                            <h3>Services Status</h3>
-                                            <div className="services-grid">
-                                                {Object.entries(clientsData[clientId].services_count || {}).map(([serviceName, serviceData]) => (
-                                                    <ServiceCard
-                                                        key={serviceName}
-                                                        name={serviceName}
-                                                        data={serviceData}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div className="chart-card">
-                                            <h3>Verification Overview</h3>
-                                            <Bar
-                                                data={{
-                                                    labels: ["Verified", "Not Verified"],
-                                                    datasets: [
-                                                        {
-                                                            label: "Count",
-                                                            data: [
-                                                                clientsData[clientId].verfied ?? clientsData[clientId].verified ?? 0,
-                                                                clientsData[clientId].not_verified ?? 0, 
-                                                            ],
-                                                            backgroundColor: ["#0488BB", "#696969"],
-                                                        },
-                                                    ],
-                                                }}
-                                                options={{
-                                                    responsive: true,
-                                                    maintainAspectRatio: true,
-                                                    plugins: {
-                                                        legend: {
-                                                            labels: {
-                                                                color: "#333",
-                                                                font: {
-                                                                    size: 12
-                                                                }
-                                                            }
-                                                        }
-                                                    },
-                                                    scales: {
-                                                        y: {
-                                                            ticks: {
-                                                                color: "rgba(0, 0, 0, 0.7)",
-                                                                font: {
-                                                                    size: 11
-                                                                }
-                                                            },
-                                                            grid: {
-                                                                color: "rgba(0, 0, 0, 0.1)"
-                                                            }
-                                                        },
-                                                        x: {
-                                                            ticks: {
-                                                                color: "rgba(0, 0, 0, 0.7)",
-                                                                font: {
-                                                                    size: 11
-                                                                }
-                                                            },
-                                                            grid: {
-                                                                color: "rgba(0, 0, 0, 0.1)"
-                                                            }
-                                                        }
-                                                    }
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="no-data-message">
-                                    No data available for Client {clientId}
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
-            ))}
-
-            {/* OVERALL SUMMARY SECTION */}
-            {!fetchingDisabled && (clientsData[1] || clientsData[2] || clientsData[3]) && (
-                <div className="overall-summary-section">
-                    <h2 className="client-title">Overall Summary (All Clients)</h2>
-
+            {/* LOADING STATE */}
+            {(clientsLoading[1] || clientsLoading[2] || clientsLoading[3]) && (
+                <div className="client-section">
                     <div className="kpi-grid">
-                        <Kpi
-                            title="Total Count"
-                            value={
-                                (clientsData[1]?.total_count || 0) +
-                                (clientsData[2]?.total_count || 0) +
-                                (clientsData[3]?.total_count || 0)
-                            }
-                        />
-                        <Kpi
-                            title="Verified"
-                            value={
-                                (clientsData[1]?.verfied || clientsData[1]?.verified || 0) +
-                                (clientsData[2]?.verfied || clientsData[2]?.verified || 0) +
-                                (clientsData[3]?.verfied || clientsData[3]?.verified || 0)
-                            }
-                        />
-                        <Kpi
-                            title="Not Verified"
-                            value={
-                                (clientsData[1]?.not_verified || 0) +
-                                (clientsData[2]?.not_verified || 0) +
-                                (clientsData[3]?.not_verified || 0)
-                            }
-                        />
-                        
+                        {[1, 2, 3].map((i) => (
+                            <div key={i} className="kpi-card">
+                                <div className="skeleton skeleton-kpi"></div>
+                            </div>
+                        ))}
                     </div>
+                    <div className="charts-grid">
+                        <div className="chart-card">
+                            <div className="skeleton skeleton-title"></div>
+                            <div className="skeleton skeleton-chart"></div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-                    <div className="chart-card">
+            {/* DATA DISPLAY - ORGANIZED BY SERVICE TYPE */}
+            {!fetchingDisabled && hasAnyData() && (
+                <>
+                    {/* OVERALL TOTALS */}
+
+                    {/* SERVICE BREAKDOWNS */}
+                    {(() => {
+                        const servicesMap = getServiceAggregatedData();
+                        return Object.entries(servicesMap).map(([serviceName, serviceData]) => (
+                            <ServiceBreakdown
+                                key={serviceName}
+                                serviceName={serviceName}
+                                serviceData={serviceData}
+                            />
+                        ));
+                    })()}
+                    <div className="overall-summary-section">
+                        <h2 className="client-title">Overall Totals (All Clients)</h2>
+                        {(() => {
+                            const { totalCount, verifiedCount, notVerifiedCount } = getOverallTotals();
+                            return (
+                                <div className="kpi-grid">
+                                    <Kpi title="Total Count" value={totalCount} />
+                                    <Kpi title="Verified" value={verifiedCount} />
+                                    <Kpi title="Not Verified" value={notVerifiedCount} />
+                                </div>
+                            );
+                        })()}
+                        <div className="chart-card">
                         <h3>Overall Verification Overview</h3>
                         <Bar
                             data={{
@@ -433,7 +390,8 @@ export default function Dashboard() {
                             }}
                         />
                     </div>
-                </div>
+                    </div>
+                </>
             )}
         </div>
     );
@@ -449,9 +407,10 @@ function Kpi({ title, value }) {
     );
 }
 
-function ServiceCard({ name, data }) {
-    const getIcon = (serviceName) => {
-        const service = serviceName.toLowerCase().replace(/_/g, " ");
+/** 📊 SERVICE BREAKDOWN WITH CLIENT DETAILS */
+function ServiceBreakdown({ serviceName, serviceData }) {
+    const getIcon = (name) => {
+        const service = name.toLowerCase().replace(/_/g, " ");
 
         if (service.includes("face") || service.includes("liveness")) {
             return (
@@ -494,7 +453,6 @@ function ServiceCard({ name, data }) {
                 </svg>
             );
         }
-        // Default icon
         return (
             <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -504,39 +462,68 @@ function ServiceCard({ name, data }) {
         );
     };
 
-    const formatName = (serviceName) => {
-        return serviceName
+    const formatName = (name) => {
+        return name
             .split("_")
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(" ");
     };
 
-    const total = data?.total ?? 0;
-    const verified = data?.verfied ?? data?.verified ?? 0;
-    const notVerified = data?.not_verified ?? 0;
-    const verifiedPercent = total > 0 ? Math.round((verified / total) * 100) : 0;
 
     return (
-        <div className="service-card">
-            <div className="service-header">
-                <div className="service-title">
-                    {getIcon(name)}
-                    <span className="service-name">{formatName(name)}</span>
-                </div>
-                <span className="service-total">{total}</span>
+        <div className="client-section">
+            <h2 className="client-title">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {getIcon(serviceName)}
+                    {formatName(serviceName)}
+                </span>
+            </h2>
+
+            {/* Service Total Summary */}
+            <div className="kpi-grid">
+                <Kpi title="Total Count" value={serviceData.total} />
+                <Kpi title="Verified" value={serviceData.verified} />
+                <Kpi title="Not Verified" value={serviceData.notVerified} />
             </div>
 
-            <div className="service-metrics">
-                <div className="metric-row">
-                    <span className="metric-label">Verified</span>
-                    <span className="metric-value metric-verified">{verified}</span>
-                </div>
-                <div className="metric-bar">
-                    <div className="metric-fill metric-verified-fill" style={{ width: `${verifiedPercent}%` }}></div>
-                </div>
-                <div className="metric-row">
-                    <span className="metric-label">Not Verified</span>
-                    <span className="metric-value metric-not-verified">{notVerified}</span>
+            {/* Client Breakdown */}
+            <div className="chart-card services-card">
+                <h3>Client Breakdown</h3>
+                <div className="client-breakdown-grid">
+                    {[1, 2, 3].map((clientId) => {
+                        const clientServiceData = serviceData.clients[clientId];
+                        if (!clientServiceData) return null;
+
+                        const clientVerifiedPercent = clientServiceData.total > 0
+                            ? Math.round((clientServiceData.verified / clientServiceData.total) * 100)
+                            : 0;
+
+                        return (
+                            <div key={clientId} className="client-breakdown-card">
+                                <h4>Client {clientId}</h4>
+                                <div className="breakdown-stats">
+                                    <div className="stat-row">
+                                        <span className="stat-label">Total:</span>
+                                        <span className="stat-value">{clientServiceData.total}</span>
+                                    </div>
+                                    <div className="stat-row">
+                                        <span className="stat-label">Verified:</span>
+                                        <span className="stat-value stat-verified">{clientServiceData.verified}</span>
+                                    </div>
+                                    <div className="stat-row">
+                                        <span className="stat-label">Not Verified:</span>
+                                        <span className="stat-value stat-not-verified">{clientServiceData.notVerified}</span>
+                                    </div>
+                                    <div className="progress-bar">
+                                        <div
+                                            className="progress-fill progress-verified"
+                                            style={{ width: `${clientVerifiedPercent}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>
