@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bar, Doughnut } from "react-chartjs-2";
+import { Bar } from "react-chartjs-2";
 import {
     Chart as ChartJS,
     BarElement,
-    ArcElement,
     CategoryScale,
     LinearScale,
     Tooltip,
@@ -15,7 +14,6 @@ import {
 
 ChartJS.register(
     BarElement,
-    ArcElement,
     CategoryScale,
     LinearScale,
     Tooltip,
@@ -25,13 +23,20 @@ ChartJS.register(
 export default function Dashboard() {
     const router = useRouter();
     const [authorized, setAuthorized] = useState(false);
-    const [client, setClient] = useState("3");
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [clientsData, setClientsData] = useState({
+        1: null,
+        2: null,
+        3: null,
+    });
+    const [clientsLoading, setClientsLoading] = useState({
+        1: false,
+        2: false,
+        3: false,
+    });
+    const [fetchingDisabled, setFetchingDisabled] = useState(false);
     const [error, setError] = useState("");
-    const [dataFetched, setDataFetched] = useState(false);
 
 
     const MAX_DAYS = 40;
@@ -104,7 +109,7 @@ export default function Dashboard() {
     //     });
     // }, [router]);
 
-    /** 📊 FETCH DASHBOARD DATA */
+    /** 📊 FETCH DASHBOARD DATA FOR ALL CLIENTS */
     const fetchData = async () => {
         const token = getToken();
         if (!token) {
@@ -123,54 +128,59 @@ export default function Dashboard() {
         }
 
         setError("");
-        setLoading(true);
-        setData(null);
-        setDataFetched(false);
+        setFetchingDisabled(true);
 
-        try {
-            const res = await fetch(
-                "https://trueidmapp.askaribank.com.pk/services-count/",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Token ${token}`,
-                    },
-                    body: JSON.stringify({
-                        client,
-                        from_date: formatDate(fromDate),
-                        to_date: formatDate(toDate),
-                    }),
+        // Reset previous data
+        setClientsData({ 1: null, 2: null, 3: null });
+
+        const clients = ["1", "2", "3"];
+
+        // Fetch data for each client sequentially
+        for (const clientId of clients) {
+            try {
+                setClientsLoading(prev => ({ ...prev, [clientId]: true }));
+
+                const res = await fetch(
+                    "https://trueidmapp.askaribank.com.pk/services-count/",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Token ${token}`,
+                        },
+                        body: JSON.stringify({
+                            client: clientId,
+                            from_date: formatDate(fromDate),
+                            to_date: formatDate(toDate),
+                        }),
+                    }
+                );
+
+                if (res.status === 401 || res.status === 403) {
+                    document.cookie = "userKey=; Max-Age=0; path=/";
+                    router.replace("/");
+                    return;
                 }
-            );
 
-            if (res.status === 401 || res.status === 403) {
-                document.cookie = "userKey=; Max-Age=0; path=/";
-                router.replace("/");
-                return;
+                if (!res.ok) {
+                    console.error(`Failed to fetch data for client ${clientId}. Status: ${res.status}`);
+                    setClientsLoading(prev => ({ ...prev, [clientId]: false }));
+                    continue;
+                }
+
+                const result = await res.json();
+
+                // Update data for this client
+                setClientsData(prev => ({ ...prev, [clientId]: result }));
+                setClientsLoading(prev => ({ ...prev, [clientId]: false }));
+
+            } catch (err) {
+                console.error(`Fetch failed for client ${clientId}:`, err);
+                setClientsLoading(prev => ({ ...prev, [clientId]: false }));
             }
-
-            if (!res.ok) {
-                setError(`Failed to fetch data. Status: ${res.status}`);
-                return;
-            }
-
-            const result = await res.json();
-
-            if (!result || Object.keys(result).length === 0) {
-                setError("No data found for the selected client and date range");
-                setDataFetched(true);
-                return;
-            }
-
-            setData(result);
-            setDataFetched(true);
-        } catch (err) {
-            console.error("Fetch failed:", err);
-            setError("Failed to fetch data. Please try again.");
-        } finally {
-            setLoading(false);
         }
+
+        setFetchingDisabled(false);
     };
 
     const clearError = () => setError("");
@@ -184,17 +194,14 @@ export default function Dashboard() {
         <div className="dashboard-wrapper">
             <h1 className="dashboard-title">Analytics Dashboard</h1>
 
+            {/* LOGOS */}
+            <div className="logos-container">
+                <img src="/Askari-bank-logo.png" alt="Askari Bank Logo" className="dashboard-logo" />
+                <img src="/truid_logo_main.png" alt="Truid Logo" className="dashboard-logo" />
+            </div>
+
             {/* FILTER CARD */}
             <div className="filter-card">
-                <div className="filter-group">
-                    <label>Client</label>
-                    <select value={client} onChange={(e) => setClient(e.target.value)}>
-                        <option value="3">3</option>
-                        <option value="2">2</option>
-                        <option value="1">1</option>
-                    </select>
-                </div>
-
                 <div className="filter-group">
                     <label>From Date</label>
                     <input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); clearError(); }} />
@@ -205,153 +212,228 @@ export default function Dashboard() {
                     <input type="date" value={toDate} onChange={(e) => { setToDate(e.target.value); clearError(); }} />
                 </div>
 
-                <button className="fetch-btn" onClick={fetchData}>
-                    {loading ? "Loading..." : "Fetch Data"}
+                <button className="fetch-btn" onClick={fetchData} disabled={fetchingDisabled}>
+                    {fetchingDisabled ? "Fetching..." : "Fetch Data"}
                 </button>
             </div>
 
             {error && <div className="error-message">{error}</div>}
 
-            {/* SKELETON LOADER */}
-            {loading && (
-                <>
-                    <div className="kpi-grid">
-                        {[1, 2, 3, 4].map((i) => (
-                            <div key={i} className="kpi-card">
-                                <div className="skeleton skeleton-kpi"></div>
+            {/* CLIENT SECTIONS */}
+            {[1, 2, 3].map((clientId) => (
+                <div key={clientId} className="client-section">
+                    <h2 className="client-title">Client {clientId}</h2>
+
+                    {/* SKELETON LOADER FOR THIS CLIENT */}
+                    {clientsLoading[clientId] && (
+                        <>
+                            <div className="kpi-grid">
+                                {[1, 2, 3, 4].map((i) => (
+                                    <div key={i} className="kpi-card">
+                                        <div className="skeleton skeleton-kpi"></div>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
-                    <div className="charts-grid">
-                        <div className="chart-card">
-                            <div className="skeleton skeleton-title"></div>
-                            <div className="skeleton skeleton-chart"></div>
-                        </div>
-                        <div className="chart-card">
-                            <div className="skeleton skeleton-title"></div>
-                            <div className="skeleton skeleton-chart"></div>
-                        </div>
-                    </div>
-                </>
-            )}
+                            <div className="charts-grid">
+                                <div className="chart-card">
+                                    <div className="skeleton skeleton-title"></div>
+                                    <div className="skeleton skeleton-chart"></div>
+                                </div>
+                                <div className="chart-card">
+                                    <div className="skeleton skeleton-title"></div>
+                                    <div className="skeleton skeleton-chart"></div>
+                                </div>
+                            </div>
+                        </>
+                    )}
 
-            {/* DASHBOARD DATA */}
-            {!loading && dataFetched && !data?.services_count && !error && (
-                <div className="no-data-message">
-                    No data available for the selected client and date range
+                    {/* DATA FOR THIS CLIENT */}
+                    {!clientsLoading[clientId] && clientsData[clientId] && (
+                        <>
+                            {clientsData[clientId].services_count ? (
+                                <>
+                                    <div className="kpi-grid">
+                                        <Kpi title="Total Count" value={clientsData[clientId].total_count ?? 0} />
+                                        <Kpi title="Verified" value={clientsData[clientId].verfied ?? clientsData[clientId].verified ?? 0} />
+                                        <Kpi title="Not Verified" value={clientsData[clientId].not_verified ?? 0} /> 
+                                    </div>
+
+                                    <div className="charts-grid">
+                                        <div className="chart-card services-card">
+                                            <h3>Services Status</h3>
+                                            <div className="services-grid">
+                                                {Object.entries(clientsData[clientId].services_count || {}).map(([serviceName, serviceData]) => (
+                                                    <ServiceCard
+                                                        key={serviceName}
+                                                        name={serviceName}
+                                                        data={serviceData}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="chart-card">
+                                            <h3>Verification Overview</h3>
+                                            <Bar
+                                                data={{
+                                                    labels: ["Verified", "Not Verified"],
+                                                    datasets: [
+                                                        {
+                                                            label: "Count",
+                                                            data: [
+                                                                clientsData[clientId].verfied ?? clientsData[clientId].verified ?? 0,
+                                                                clientsData[clientId].not_verified ?? 0, 
+                                                            ],
+                                                            backgroundColor: ["#0488BB", "#696969"],
+                                                        },
+                                                    ],
+                                                }}
+                                                options={{
+                                                    responsive: true,
+                                                    maintainAspectRatio: true,
+                                                    plugins: {
+                                                        legend: {
+                                                            labels: {
+                                                                color: "#333",
+                                                                font: {
+                                                                    size: 12
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    scales: {
+                                                        y: {
+                                                            ticks: {
+                                                                color: "rgba(0, 0, 0, 0.7)",
+                                                                font: {
+                                                                    size: 11
+                                                                }
+                                                            },
+                                                            grid: {
+                                                                color: "rgba(0, 0, 0, 0.1)"
+                                                            }
+                                                        },
+                                                        x: {
+                                                            ticks: {
+                                                                color: "rgba(0, 0, 0, 0.7)",
+                                                                font: {
+                                                                    size: 11
+                                                                }
+                                                            },
+                                                            grid: {
+                                                                color: "rgba(0, 0, 0, 0.1)"
+                                                            }
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="no-data-message">
+                                    No data available for Client {clientId}
+                                </div>
+                            )}
+                        </>
+                    )}
                 </div>
-            )}
+            ))}
 
-            {data && data.services_count && (
-                <>
+            {/* OVERALL SUMMARY SECTION */}
+            {!fetchingDisabled && (clientsData[1] || clientsData[2] || clientsData[3]) && (
+                <div className="overall-summary-section">
+                    <h2 className="client-title">Overall Summary (All Clients)</h2>
+
                     <div className="kpi-grid">
-                        <Kpi title="Total Count" value={data.total_count ?? 0} />
-                        <Kpi title="Verified" value={data.verified ?? 0} />
-                        <Kpi title="Not Verified" value={data.not_verified ?? 0} />
-                        <Kpi title="Incomplete" value={data.incomplete ?? 0} />
+                        <Kpi
+                            title="Total Count"
+                            value={
+                                (clientsData[1]?.total_count || 0) +
+                                (clientsData[2]?.total_count || 0) +
+                                (clientsData[3]?.total_count || 0)
+                            }
+                        />
+                        <Kpi
+                            title="Verified"
+                            value={
+                                (clientsData[1]?.verfied || clientsData[1]?.verified || 0) +
+                                (clientsData[2]?.verfied || clientsData[2]?.verified || 0) +
+                                (clientsData[3]?.verfied || clientsData[3]?.verified || 0)
+                            }
+                        />
+                        <Kpi
+                            title="Not Verified"
+                            value={
+                                (clientsData[1]?.not_verified || 0) +
+                                (clientsData[2]?.not_verified || 0) +
+                                (clientsData[3]?.not_verified || 0)
+                            }
+                        />
+                        
                     </div>
 
-                    <div className="charts-grid">
-                        <div className="chart-card">
-                            <h3>Services Distribution</h3>
-                            <Doughnut
-                                data={{
-                                    labels: Object.keys(data.services_count || {}),
-                                    datasets: [
-                                        {
-                                            data: Object.values(data.services_count || {}).map(
-                                                (s) => s?.total || 0
-                                            ),
-                                            backgroundColor: [
-                                                "#43cea2",
-                                                "#667eea",
-                                                "#ffb703",
-                                                "#ef476f",
-                                                "#06d6a0",
-                                                "#118ab2",
-                                            ],
-                                        },
-                                    ],
-                                }}
-                                options={{
-                                    responsive: true,
-                                    maintainAspectRatio: true,
-                                    plugins: {
-                                        legend: {
-                                            display: true,
-                                            position: "bottom",
-                                            labels: {
-                                                color: "white",
-                                                font: {
-                                                    size: 12
-                                                },
-                                                padding: 10
+                    <div className="chart-card">
+                        <h3>Overall Verification Overview</h3>
+                        <Bar
+                            data={{
+                                labels: ["Verified", "Not Verified"],
+                                datasets: [
+                                    {
+                                        label: "Count",
+                                        data: [
+                                            (clientsData[1]?.verfied || clientsData[1]?.verified || 0) +
+                                            (clientsData[2]?.verfied || clientsData[2]?.verified || 0) +
+                                            (clientsData[3]?.verfied || clientsData[3]?.verified || 0),
+                                            (clientsData[1]?.not_verified || 0) +
+                                            (clientsData[2]?.not_verified || 0) +
+                                            (clientsData[3]?.not_verified || 0),
+                                        ],
+                                        backgroundColor: ["#0488BB", "#696969"],
+                                    },
+                                ],
+                            }}
+                            options={{
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: {
+                                        labels: {
+                                            color: "#333",
+                                            font: {
+                                                size: 12
                                             }
                                         }
                                     }
-                                }}
-                            />
-                        </div>
-
-                        <div className="chart-card">
-                            <h3>Verification Overview</h3>
-                            <Bar
-                                data={{
-                                    labels: ["Verified", "Not Verified", "Incomplete"],
-                                    datasets: [
-                                        {
-                                            label: "Count",
-                                            data: [
-                                                data.verified ?? 0,
-                                                data.not_verified ?? 0,
-                                                data.incomplete ?? 0,
-                                            ],
-                                            backgroundColor: "#43cea2",
-                                        },
-                                    ],
-                                }}
-                                options={{
-                                    responsive: true,
-                                    maintainAspectRatio: true,
-                                    plugins: {
-                                        legend: {
-                                            labels: {
-                                                color: "white",
-                                                font: {
-                                                    size: 12
-                                                }
+                                },
+                                scales: {
+                                    y: {
+                                        ticks: {
+                                            color: "rgba(0, 0, 0, 0.7)",
+                                            font: {
+                                                size: 11
                                             }
+                                        },
+                                        grid: {
+                                            color: "rgba(0, 0, 0, 0.1)"
                                         }
                                     },
-                                    scales: {
-                                        y: {
-                                            ticks: {
-                                                color: "rgba(255, 255, 255, 0.8)",
-                                                font: {
-                                                    size: 11
-                                                }
-                                            },
-                                            grid: {
-                                                color: "rgba(255, 255, 255, 0.1)"
+                                    x: {
+                                        ticks: {
+                                            color: "rgba(0, 0, 0, 0.7)",
+                                            font: {
+                                                size: 11
                                             }
                                         },
-                                        x: {
-                                            ticks: {
-                                                color: "rgba(255, 255, 255, 0.8)",
-                                                font: {
-                                                    size: 11
-                                                }
-                                            },
-                                            grid: {
-                                                color: "rgba(255, 255, 255, 0.1)"
-                                            }
+                                        grid: {
+                                            color: "rgba(0, 0, 0, 0.1)"
                                         }
                                     }
-                                }}
-                            />
-                        </div>
+                                }
+                            }}
+                        />
                     </div>
-                </>
+                </div>
             )}
         </div>
     );
@@ -363,6 +445,100 @@ function Kpi({ title, value }) {
             <span>{title}</span>
             <br />
             <strong>{value}</strong>
+        </div>
+    );
+}
+
+function ServiceCard({ name, data }) {
+    const getIcon = (serviceName) => {
+        const service = serviceName.toLowerCase().replace(/_/g, " ");
+
+        if (service.includes("face") || service.includes("liveness")) {
+            return (
+                <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="9" cy="9" r="4"></circle>
+                    <path d="M21 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+            );
+        }
+        if (service.includes("document") || service.includes("capture")) {
+            return (
+                <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+            );
+        }
+        if (service.includes("ocr") || service.includes("text") || service.includes("extraction")) {
+            return (
+                <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 7V4h16v3M9 20h6M12 4v16"></path>
+                </svg>
+            );
+        }
+        if (service.includes("fingerprint")) {
+            return (
+                <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 6"></path>
+                    <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 6-6 6 6 0 0 1 6 6c0 2.5-.5 4.5-1 5.5"></path>
+                    <path d="M12 12v4c0 2.5.5 4.5 1 5.5"></path>
+                </svg>
+            );
+        }
+        if (service.includes("matching") || service.includes("selfie")) {
+            return (
+                <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M17 21v-2a4 4 0 0 0-3-3.87M9 21v-2a4 4 0 0 1 3-3.87"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <circle cx="15" cy="7" r="4"></circle>
+                </svg>
+            );
+        }
+        // Default icon
+        return (
+            <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+        );
+    };
+
+    const formatName = (serviceName) => {
+        return serviceName
+            .split("_")
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ");
+    };
+
+    const total = data?.total ?? 0;
+    const verified = data?.verfied ?? data?.verified ?? 0;
+    const notVerified = data?.not_verified ?? 0;
+    const verifiedPercent = total > 0 ? Math.round((verified / total) * 100) : 0;
+
+    return (
+        <div className="service-card">
+            <div className="service-header">
+                <div className="service-title">
+                    {getIcon(name)}
+                    <span className="service-name">{formatName(name)}</span>
+                </div>
+                <span className="service-total">{total}</span>
+            </div>
+
+            <div className="service-metrics">
+                <div className="metric-row">
+                    <span className="metric-label">Verified</span>
+                    <span className="metric-value metric-verified">{verified}</span>
+                </div>
+                <div className="metric-bar">
+                    <div className="metric-fill metric-verified-fill" style={{ width: `${verifiedPercent}%` }}></div>
+                </div>
+                <div className="metric-row">
+                    <span className="metric-label">Not Verified</span>
+                    <span className="metric-value metric-not-verified">{notVerified}</span>
+                </div>
+            </div>
         </div>
     );
 }

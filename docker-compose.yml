@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nextjs-app
+    container_name: dobc-dashboard-app
     restart: unless-stopped
     ports:
       - "4444:4444"

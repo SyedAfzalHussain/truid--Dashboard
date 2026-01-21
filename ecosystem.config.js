@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'nextjs-app',
+      name: 'dasboard-dobc-app',
       script: 'node_modules/.bin/next',
       args: 'start',
       cwd: '/app',
