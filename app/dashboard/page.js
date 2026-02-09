@@ -192,6 +192,11 @@ export default function Dashboard() {
 
     const clearError = () => setError("");
 
+    const handleLogout = () => {
+        document.cookie = "userKey=; Max-Age=0; path=/";
+        router.replace("/");
+    };
+
     /** 📊 AGGREGATE DATA BY SERVICE TYPE */
     const getServiceAggregatedData = () => {
         const servicesMap = {};
@@ -257,6 +262,13 @@ export default function Dashboard() {
     return (
         <div className="dashboard-wrapper">
             <h1 className="dashboard-title">Analytics Dashboard</h1>
+            <button className="logout-btn" onClick={handleLogout} title="Logout">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                </button>
 
             {/* LOGOS */}
             <div className="logos-container">
