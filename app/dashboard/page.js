@@ -1,24 +1,20 @@
 "use client";
+import {
+    ResponsiveContainer,
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip, FunnelChart, Funnel,
+
+    PieChart,
+    Pie,
+    Cell,
+} from "recharts";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bar } from "react-chartjs-2";
-import {
-    Chart as ChartJS,
-    BarElement,
-    CategoryScale,
-    LinearScale,
-    Tooltip,
-    Legend,
-} from "chart.js";
-
-ChartJS.register(
-    BarElement,
-    CategoryScale,
-    LinearScale,
-    Tooltip,
-    Legend
-);
 
 export default function Dashboard() {
     const router = useRouter();
@@ -130,13 +126,11 @@ export default function Dashboard() {
         setError("");
         setFetchingDisabled(true);
 
-        // Reset previous data and set all clients to loading
         setClientsData({ 1: null, 2: null, 3: null });
         setClientsLoading({ 1: true, 2: true, 3: true });
 
         const clients = ["1", "2", "3"];
 
-        // Fetch data for all clients in parallel using Promise.all
         try {
             const fetchPromises = clients.map(async (clientId) => {
                 const res = await fetch(
@@ -192,58 +186,66 @@ export default function Dashboard() {
 
     const clearError = () => setError("");
 
-    /** 📊 AGGREGATE DATA BY SERVICE TYPE */
-    const getServiceAggregatedData = () => {
+    const handleLogout = () => {
+        document.cookie = "userKey=; Max-Age=0; path=/";
+        router.replace("/");
+    };
+
+    /** 📊 AGGREGATE DATA FOR OVERALL FUNNEL */
+    const getAggregatedFunnelData = () => {
+        let totalCount = 0;
+        let verified = 0;
+        let notVerified = 0;
+        let pending = 0;
+        let incomplete = 0;
         const servicesMap = {};
 
         [1, 2, 3].forEach((clientId) => {
             const clientData = clientsData[clientId];
-            if (!clientData?.services_count) return;
+            if (!clientData) return;
 
-            Object.entries(clientData.services_count).forEach(([serviceName, serviceData]) => {
-                if (!servicesMap[serviceName]) {
-                    servicesMap[serviceName] = {
-                        total: 0,
-                        verified: 0,
-                        notVerified: 0,
-                        clients: {}
-                    };
-                }
+            totalCount += clientData.total_count || 0;
+            verified += clientData.verfied || clientData.verified || 0;
+            notVerified += clientData.not_verified || 0;
+            pending += clientData.pending || 0;
+            incomplete += clientData.incomplete || 0;
 
-                const verified = serviceData?.verfied ?? serviceData?.verified ?? 0;
-                const notVerified = serviceData?.not_verified ?? 0;
-                const total = serviceData?.total ?? 0;
+            if (clientData.services_count) {
+                Object.entries(clientData.services_count).forEach(([serviceName, serviceData]) => {
+                    if (!servicesMap[serviceName]) {
+                        servicesMap[serviceName] = {
+                            total: 0,
+                            verified: 0,
+                            notVerified: 0,
+                            pending: 0,
+                            matchedApplicants: 0,
+                            notMatchedApplicants: 0,
+                        };
+                    }
 
-                servicesMap[serviceName].total += total;
-                servicesMap[serviceName].verified += verified;
-                servicesMap[serviceName].notVerified += notVerified;
-                servicesMap[serviceName].clients[clientId] = {
-                    verified,
-                    notVerified,
-                    total
-                };
-            });
-        });
-
-        return servicesMap;
-    };
-
-    /** 📊 GET OVERALL TOTALS */
-    const getOverallTotals = () => {
-        let totalCount = 0;
-        let verifiedCount = 0;
-        let notVerifiedCount = 0;
-
-        [1, 2, 3].forEach((clientId) => {
-            const clientData = clientsData[clientId];
-            if (clientData) {
-                totalCount += clientData.total_count || 0;
-                verifiedCount += clientData.verfied || clientData.verified || 0;
-                notVerifiedCount += clientData.not_verified || 0;
+                    servicesMap[serviceName].total += serviceData?.total || 0;
+                    servicesMap[serviceName].verified += serviceData?.verfied ?? serviceData?.verified ?? 0;
+                    servicesMap[serviceName].notVerified += serviceData?.not_verified ?? 0;
+                    servicesMap[serviceName].pending += serviceData?.Pending ?? 0;
+                    servicesMap[serviceName].matchedApplicants += serviceData?.matched_applicants ?? 0;
+                    servicesMap[serviceName].notMatchedApplicants += serviceData?.not_matched_applicants ?? 0;
+                });
             }
         });
 
-        return { totalCount, verifiedCount, notVerifiedCount };
+        // Sort services by total count (descending)
+        const sortedServices = Object.entries(servicesMap)
+            .sort(([, a], [, b]) => b.total - a.total)
+            .map(([name, data]) => ({ name, ...data }));
+
+        return {
+            totalCount,
+            verified,
+            notVerified,
+            pending,
+            incomplete,
+            services: sortedServices,
+        };
     };
 
     const hasAnyData = () => {
@@ -254,8 +256,19 @@ export default function Dashboard() {
         return null; // prevents UI flash
     }
 
+    const funnelData = getAggregatedFunnelData();
+
     return (
         <div className="dashboard-wrapper">
+            {/* Logout Button - Top Right */}
+            <button className="logout-btn" onClick={handleLogout} title="Logout">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </button>
+
             <h1 className="dashboard-title">Analytics Dashboard</h1>
 
             {/* LOGOS */}
@@ -285,183 +298,64 @@ export default function Dashboard() {
 
             {/* LOADING STATE */}
             {(clientsLoading[1] || clientsLoading[2] || clientsLoading[3]) && (
-                <div className="client-section">
-                    <div className="kpi-grid">
-                        {[1, 2, 3].map((i) => (
-                            <div key={i} className="kpi-card">
-                                <div className="skeleton skeleton-kpi"></div>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="charts-grid">
-                        <div className="chart-card">
-                            <div className="skeleton skeleton-title"></div>
-                            <div className="skeleton skeleton-chart"></div>
-                        </div>
+                <div className="funnel-section">
+                    <div className="funnel-card">
+                        <div className="skeleton skeleton-funnel"></div>
                     </div>
                 </div>
             )}
 
-            {/* DATA DISPLAY - ORGANIZED BY SERVICE TYPE */}
+            {/* DATA DISPLAY - FUNNEL VISUALIZATION */}
             {!fetchingDisabled && hasAnyData() && (
                 <>
-                    {/* OVERALL TOTALS */}
+                    {/* OVERALL FUNNEL */}
+                    <FunnelVisualization
+                        title="Overall Funnel (All Clients)"
+                        data={funnelData}
+                    />
 
-                    {/* SERVICE BREAKDOWNS */}
-                    {(() => {
-                        const servicesMap = getServiceAggregatedData();
-                        return Object.entries(servicesMap).map(([serviceName, serviceData]) => (
-                            <ServiceBreakdown
-                                key={serviceName}
-                                serviceName={serviceName}
-                                serviceData={serviceData}
+                    {/* PER CLIENT FUNNELS */}
+                    {[1, 2, 3].map((clientId) => {
+                        const clientData = clientsData[clientId];
+                        if (!clientData?.services_count) return null;
+
+                        const services = Object.entries(clientData.services_count)
+                            .sort(([, a], [, b]) => (b?.total || 0) - (a?.total || 0))
+                            .map(([name, data]) => ({
+                                name,
+                                total: data?.total || 0,
+                                verified: data?.verfied ?? data?.verified ?? 0,
+                                notVerified: data?.not_verified ?? 0,
+                                pending: data?.Pending ?? 0,
+                                matchedApplicants: data?.matched_applicants ?? 0,
+                                notMatchedApplicants: data?.not_matched_applicants ?? 0,
+                            }));
+
+                        const clientFunnelData = {
+                            totalCount: clientData.total_count || 0,
+                            verified: clientData.verfied || clientData.verified || 0,
+                            notVerified: clientData.not_verified || 0,
+                            pending: clientData.pending || 0,
+                            incomplete: clientData.incomplete || 0,
+                            services,
+                        };
+
+                        return (
+                            <FunnelVisualization
+                                key={clientId}
+                                title={`Client ${clientId} Funnel - ${clientData.client_name || 'Unknown'}`}
+                                data={clientFunnelData}
                             />
-                        ));
-                    })()}
-                    <div className="overall-summary-section">
-                        <h2 className="client-title">Overall Totals (All Clients)</h2>
-                        {(() => {
-                            const { totalCount, verifiedCount, notVerifiedCount } = getOverallTotals();
-                            return (
-                                <div className="kpi-grid">
-                                    <Kpi title="Total Count" value={totalCount} />
-                                    <Kpi title="Verified" value={verifiedCount} />
-                                    <Kpi title="Not Verified" value={notVerifiedCount} />
-                                </div>
-                            );
-                        })()}
-                        <div className="chart-card">
-                        <h3>Overall Verification Overview</h3>
-                        <Bar
-                            data={{
-                                labels: ["Verified", "Not Verified"],
-                                datasets: [
-                                    {
-                                        label: "Count",
-                                        data: [
-                                            (clientsData[1]?.verfied || clientsData[1]?.verified || 0) +
-                                            (clientsData[2]?.verfied || clientsData[2]?.verified || 0) +
-                                            (clientsData[3]?.verfied || clientsData[3]?.verified || 0),
-                                            (clientsData[1]?.not_verified || 0) +
-                                            (clientsData[2]?.not_verified || 0) +
-                                            (clientsData[3]?.not_verified || 0),
-                                        ],
-                                        backgroundColor: ["#0488BB", "#696969"],
-                                    },
-                                ],
-                            }}
-                            options={{
-                                responsive: true,
-                                maintainAspectRatio: true,
-                                plugins: {
-                                    legend: {
-                                        labels: {
-                                            color: "#333",
-                                            font: {
-                                                size: 12
-                                            }
-                                        }
-                                    }
-                                },
-                                scales: {
-                                    y: {
-                                        ticks: {
-                                            color: "rgba(0, 0, 0, 0.7)",
-                                            font: {
-                                                size: 11
-                                            }
-                                        },
-                                        grid: {
-                                            color: "rgba(0, 0, 0, 0.1)"
-                                        }
-                                    },
-                                    x: {
-                                        ticks: {
-                                            color: "rgba(0, 0, 0, 0.7)",
-                                            font: {
-                                                size: 11
-                                            }
-                                        },
-                                        grid: {
-                                            color: "rgba(0, 0, 0, 0.1)"
-                                        }
-                                    }
-                                }
-                            }}
-                        />
-                    </div>
-                    </div>
+                        );
+                    })}
                 </>
             )}
         </div>
     );
 }
 
-function Kpi({ title, value }) {
-    return (
-        <div className="kpi-card">
-            <span>{title}</span>
-            <br />
-            <strong>{value}</strong>
-        </div>
-    );
-}
-
-/** 📊 SERVICE BREAKDOWN WITH CLIENT DETAILS */
-function ServiceBreakdown({ serviceName, serviceData }) {
-    const getIcon = (name) => {
-        const service = name.toLowerCase().replace(/_/g, " ");
-
-        if (service.includes("face") || service.includes("liveness")) {
-            return (
-                <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="9" cy="9" r="4"></circle>
-                    <path d="M21 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
-                </svg>
-            );
-        }
-        if (service.includes("document") || service.includes("capture")) {
-            return (
-                <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                </svg>
-            );
-        }
-        if (service.includes("ocr") || service.includes("text") || service.includes("extraction")) {
-            return (
-                <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M4 7V4h16v3M9 20h6M12 4v16"></path>
-                </svg>
-            );
-        }
-        if (service.includes("fingerprint")) {
-            return (
-                <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 6"></path>
-                    <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 6-6 6 6 0 0 1 6 6c0 2.5-.5 4.5-1 5.5"></path>
-                    <path d="M12 12v4c0 2.5.5 4.5 1 5.5"></path>
-                </svg>
-            );
-        }
-        if (service.includes("matching") || service.includes("selfie")) {
-            return (
-                <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M17 21v-2a4 4 0 0 0-3-3.87M9 21v-2a4 4 0 0 1 3-3.87"></path>
-                    <circle cx="9" cy="7" r="4"></circle>
-                    <circle cx="15" cy="7" r="4"></circle>
-                </svg>
-            );
-        }
-        return (
-            <svg className="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-        );
-    };
-
+/** 📊 FUNNEL VISUALIZATION COMPONENT */
+function FunnelVisualization({ title, data }) {
     const formatName = (name) => {
         return name
             .split("_")
@@ -469,61 +363,259 @@ function ServiceBreakdown({ serviceName, serviceData }) {
             .join(" ");
     };
 
+    // Prepare funnel chart data
+    const funnelChartData = [
+        { name: "Total Applications", value: data.totalCount, fill: "#2255FF" },
+        ...data.services.map((service, index) => ({
+            name: formatName(service.name),
+            value: service.total,
+            fill: `hsl(${200 + index * 15}, 70%, 55%)`,
+            details: service
+        })),
+    ];
+
+    // Prepare outcome breakdown data
+    const outcomeData = [
+        { name: "Verified", value: data.verified, fill: "#0488BB" },
+        { name: "Pending", value: data.pending, fill: "#ffa502" },
+        { name: "Not Verified", value: data.notVerified, fill: "#696969" },
+        { name: "Incomplete", value: data.incomplete, fill: "#d63031" }
+    ].filter(item => item.value > 0);
+
+    const CustomFunnelLabel = ({ x, y, width, height, value, name }) => {
+        return (
+            <g>
+                <text
+                    x={x + width / 2}
+                    y={y + height / 2 - 8}
+                    fill="#fff"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontWeight="700"
+                    fontSize="16"
+                    style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}
+                >
+                    {value.toLocaleString()}
+                </text>
+                <text
+                    x={x + width / 2}
+                    y={y + height / 2 + 10}
+                    fill="#fff"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize="12"
+                    opacity="0.9"
+                >
+                    {name?.length > 20 ? name?.substring(0, 20) + '...' : name}
+                </text>
+            </g>
+        );
+    };
 
     return (
-        <div className="client-section">
-            <h2 className="client-title">
-                <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    {getIcon(serviceName)}
-                    {formatName(serviceName)}
-                </span>
-            </h2>
+        <div className="funnel-section">
+            <h2 className="funnel-title">{title}</h2>
 
-            {/* Service Total Summary */}
-            <div className="kpi-grid">
-                <Kpi title="Total Count" value={serviceData.total} />
-                <Kpi title="Verified" value={serviceData.verified} />
-                <Kpi title="Not Verified" value={serviceData.notVerified} />
+            {/* Overall Summary Cards */}
+            <div className="overall-summary-cards">
+                <div className="summary-card summary-total">
+                    <div className="summary-label">Total Applications</div>
+                    <div className="summary-value">{data.totalCount.toLocaleString()}</div>
+                </div>
+                <div className="summary-card summary-verified">
+                    <div className="summary-label">Verified</div>
+                    <div className="summary-value">{data.verified.toLocaleString()}</div>
+                </div>
+                <div className="summary-card summary-pending">
+                    <div className="summary-label">Pending</div>
+                    <div className="summary-value">{data.pending.toLocaleString()}</div>
+                </div>
+                <div className="summary-card summary-not-verified">
+                    <div className="summary-label">Not Verified</div>
+                    <div className="summary-value">{data.notVerified.toLocaleString()}</div>
+                </div>
+                {data.incomplete > 0 && (
+                    <div className="summary-card summary-incomplete">
+                        <div className="summary-label">Incomplete</div>
+                        <div className="summary-value">{data.incomplete.toLocaleString()}</div>
+                    </div>
+                )}
             </div>
 
-            {/* Client Breakdown */}
-            <div className="chart-card services-card">
-                <h3>Client Breakdown</h3>
-                <div className="client-breakdown-grid">
-                    {[1, 2, 3].map((clientId) => {
-                        const clientServiceData = serviceData.clients[clientId];
-                        if (!clientServiceData) return null;
+            {/* Funnel Chart */}
+            <div className="funnel-chart-section">
+                <h3 className="section-subtitle">Application Flow Funnel</h3>
+                <div className="funnel-chart-container">
+                    <ResponsiveContainer width="100%" height={500}>
+                        <FunnelChart>
+                            <Tooltip
+                                contentStyle={{
+                                    background: 'rgba(255, 255, 255, 0.95)',
+                                    border: '1px solid rgba(0, 0, 0, 0.1)',
+                                    borderRadius: '8px',
+                                    padding: '10px',
+                                }}
+                                formatter={(value) => value.toLocaleString()}
+                            />
+                            <Funnel
+                                dataKey="value"
+                                data={funnelChartData}
+                                isAnimationActive
+                                label={CustomFunnelLabel}
+                            >
+                                {funnelChartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                ))}
+                            </Funnel>
+                        </FunnelChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
 
-                        const clientVerifiedPercent = clientServiceData.total > 0
-                            ? Math.round((clientServiceData.verified / clientServiceData.total) * 100)
-                            : 0;
+            {/* Detailed Service Breakdown */}
+            <div className="services-breakdown-section">
+                <h3 className="section-subtitle">Service Details</h3>
+                <div className="services-breakdown-grid">
+                    {data.services.map((service, index) => {
+                        const hasPending = service.pending > 0;
+                        const hasFingerprintData = service.matchedApplicants > 0 || service.notMatchedApplicants > 0;
+                        const verifiedPercent = service.total > 0 ? ((service.verified / service.total) * 100).toFixed(1) : 0;
 
                         return (
-                            <div key={clientId} className="client-breakdown-card">
-                                <h4>Client {clientId}</h4>
-                                <div className="breakdown-stats">
-                                    <div className="stat-row">
-                                        <span className="stat-label">Total:</span>
-                                        <span className="stat-value">{clientServiceData.total}</span>
+                            <>
+                            {/* {service?.name === 'fingerprint_capture' ?
+                                (
+                                    <div key={service.name} className="service-detail-card fingerprint-service-card">
+                                        <div className="service-detail-header">
+                                            <div className="service-detail-title">
+                                                <div className="service-icon-small">
+                                                    {index + 1}
+                                                </div>
+                                                <div>
+                                                    <div className="service-detail-name">{formatName(service.name)}</div>
+                                                    <div className="service-detail-total">{service.total.toLocaleString()} Total</div>
+                                                </div>
+                                            </div>
+                                            <div className="service-detail-verified-rate" style={{ color: '#0488BB' }}>
+                                                {verifiedPercent}%
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="stat-row">
-                                        <span className="stat-label">Verified:</span>
-                                        <span className="stat-value stat-verified">{clientServiceData.verified}</span>
+                                )
+                                : ( */}
+                                    <div key={service.name} className="service-detail-card">
+                                        <div className="service-detail-header">
+                                            <div className="service-detail-title">
+                                                <div className="service-icon-small">
+                                                    {index + 1}
+                                                </div>
+                                                <div>
+                                                    <div className="service-detail-name">{formatName(service.name)}</div>
+                                                    <div className="service-detail-total">{service.total.toLocaleString()} Total</div>
+                                                </div>
+                                            </div>
+                                            <div className="service-detail-verified-rate" style={{ color: '#0488BB' }}>
+                                                {verifiedPercent}%
+                                            </div>
+                                        </div>
+                                        {/* {service?.name === 'fingerprint_capture' ? (
+                                    <div className="fingerprint-banner">
+                                        <strong>Note:</strong> This service includes fingerprint matching data.
                                     </div>
-                                    <div className="stat-row">
-                                        <span className="stat-label">Not Verified:</span>
-                                        <span className="stat-value stat-not-verified">{clientServiceData.notVerified}</span>
+                                ):( */}
+                                        <div className="service-detail-metrics">
+                                            <div className="metric-detail-row">
+                                                <div className="metric-detail-label">Verified</div>
+                                                <div className="metric-detail-value metric-verified">
+                                                    {service.verified.toLocaleString()}
+                                                </div>
+                                                <div className="metric-detail-bar">
+                                                    <div
+                                                        className="metric-bar-fill metric-verified-fill"
+                                                        style={{ width: `${verifiedPercent}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {service.notVerified > 0 && (
+                                                <div className="metric-detail-row">
+                                                    <div className="metric-detail-label">Not Verified</div>
+                                                    <div className="metric-detail-value metric-not-verified">
+                                                        {service.notVerified.toLocaleString()}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {hasPending && (
+                                                <div className="metric-detail-row">
+                                                    <div className="metric-detail-label">Pending</div>
+                                                    <div className="metric-detail-value metric-pending">
+                                                        {service.pending.toLocaleString()}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* {hasFingerprintData && (
+                                        <div className="fingerprint-detail-section">
+                                            <div className="fp-divider"></div>
+                                            <div className="fp-detail-title">Fingerprint Matching</div>
+                                            <div className="fp-detail-grid">
+                                                <div className="fp-detail-item">
+                                                    <div className="fp-detail-label">Matched Applicants</div>
+                                                    <div className="fp-detail-value fp-matched">
+                                                        {service.matchedApplicants.toLocaleString()}
+                                                    </div>
+                                                </div>
+                                                <div className="fp-detail-item">
+                                                    <div className="fp-detail-label">Not Matched</div>
+                                                    <div className="fp-detail-value fp-not-matched">
+                                                        {service.notMatchedApplicants.toLocaleString()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )} */}
+                                        </div>
+                                        {/* )} */}
                                     </div>
-                                    <div className="progress-bar">
-                                        <div
-                                            className="progress-fill progress-verified"
-                                            style={{ width: `${clientVerifiedPercent}%` }}
-                                        ></div>
-                                    </div>
-                                </div>
-                            </div>
+                                {/* )} */}
+                            </>
                         );
                     })}
+                </div >
+            </div>
+
+            {/* Conversion Metrics */}
+            <div className="conversion-metrics-section">
+                <h3 className="section-subtitle">Conversion Metrics</h3>
+                <div className="conversion-metrics-grid">
+                    <div className="conversion-metric-card">
+                        <div className="conversion-metric-label">Conversion Rate</div>
+                        <div className="conversion-metric-value">
+                            {data.totalCount > 0 ? ((data.verified / data.totalCount) * 100).toFixed(1) : 0}%
+                        </div>
+                        <div className="conversion-metric-desc">
+                            {data.verified.toLocaleString()} of {data.totalCount.toLocaleString()} applications
+                        </div>
+                    </div>
+                    <div className="conversion-metric-card">
+                        <div className="conversion-metric-label">Drop Off Rate</div>
+                        <div className="conversion-metric-value negative">
+                            {data.totalCount > 0 ? (((data.totalCount - data.verified) / data.totalCount) * 100).toFixed(1) : 0}%
+                        </div>
+                        <div className="conversion-metric-desc">
+                            {(data.totalCount - data.verified).toLocaleString()} applications not verified
+                        </div>
+                    </div>
+                    <div className="conversion-metric-card">
+                        <div className="conversion-metric-label">Pending Rate</div>
+                        <div className="conversion-metric-value warning">
+                            {data.totalCount > 0 ? ((data.pending / data.totalCount) * 100).toFixed(1) : 0}%
+                        </div>
+                        <div className="conversion-metric-desc">
+                            {data.pending.toLocaleString()} applications pending
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
