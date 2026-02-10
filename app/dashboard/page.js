@@ -263,12 +263,12 @@ export default function Dashboard() {
         <div className="dashboard-wrapper">
             <h1 className="dashboard-title">Analytics Dashboard</h1>
             <button className="logout-btn" onClick={handleLogout} title="Logout">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                        <polyline points="16 17 21 12 16 7"></polyline>
-                        <line x1="21" y1="12" x2="9" y2="12"></line>
-                    </svg>
-                </button>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </button>
 
             {/* LOGOS */}
             <div className="logos-container">
@@ -330,7 +330,7 @@ export default function Dashboard() {
                             />
                         ));
                     })()}
-                    <div className="overall-summary-section">
+                    {/* <div className="overall-summary-section">
                         <h2 className="client-title">Overall Totals (All Clients)</h2>
                         {(() => {
                             const { totalCount, verifiedCount, notVerifiedCount } = getOverallTotals();
@@ -343,66 +343,66 @@ export default function Dashboard() {
                             );
                         })()}
                         <div className="chart-card">
-                        <h3>Overall Verification Overview</h3>
-                        <Bar
-                            data={{
-                                labels: ["Verified", "Not Verified"],
-                                datasets: [
-                                    {
-                                        label: "Count",
-                                        data: [
-                                            (clientsData[1]?.verfied || clientsData[1]?.verified || 0) +
-                                            (clientsData[2]?.verfied || clientsData[2]?.verified || 0) +
-                                            (clientsData[3]?.verfied || clientsData[3]?.verified || 0),
-                                            (clientsData[1]?.not_verified || 0) +
-                                            (clientsData[2]?.not_verified || 0) +
-                                            (clientsData[3]?.not_verified || 0),
-                                        ],
-                                        backgroundColor: ["#0488BB", "#696969"],
+                            <h3>Overall Verification Overview</h3>
+                            <Bar
+                                data={{
+                                    labels: ["Verified", "Not Verified"],
+                                    datasets: [
+                                        {
+                                            label: "Count",
+                                            data: [
+                                                (clientsData[1]?.verfied || clientsData[1]?.verified || 0) +
+                                                (clientsData[2]?.verfied || clientsData[2]?.verified || 0) +
+                                                (clientsData[3]?.verfied || clientsData[3]?.verified || 0),
+                                                (clientsData[1]?.not_verified || 0) +
+                                                (clientsData[2]?.not_verified || 0) +
+                                                (clientsData[3]?.not_verified || 0),
+                                            ],
+                                            backgroundColor: ["#0488BB", "#696969"],
+                                        },
+                                    ],
+                                }}
+                                options={{
+                                    responsive: true,
+                                    maintainAspectRatio: true,
+                                    plugins: {
+                                        legend: {
+                                            labels: {
+                                                color: "#333",
+                                                font: {
+                                                    size: 12
+                                                }
+                                            }
+                                        }
                                     },
-                                ],
-                            }}
-                            options={{
-                                responsive: true,
-                                maintainAspectRatio: true,
-                                plugins: {
-                                    legend: {
-                                        labels: {
-                                            color: "#333",
-                                            font: {
-                                                size: 12
+                                    scales: {
+                                        y: {
+                                            ticks: {
+                                                color: "rgba(0, 0, 0, 0.7)",
+                                                font: {
+                                                    size: 11
+                                                }
+                                            },
+                                            grid: {
+                                                color: "rgba(0, 0, 0, 0.1)"
+                                            }
+                                        },
+                                        x: {
+                                            ticks: {
+                                                color: "rgba(0, 0, 0, 0.7)",
+                                                font: {
+                                                    size: 11
+                                                }
+                                            },
+                                            grid: {
+                                                color: "rgba(0, 0, 0, 0.1)"
                                             }
                                         }
                                     }
-                                },
-                                scales: {
-                                    y: {
-                                        ticks: {
-                                            color: "rgba(0, 0, 0, 0.7)",
-                                            font: {
-                                                size: 11
-                                            }
-                                        },
-                                        grid: {
-                                            color: "rgba(0, 0, 0, 0.1)"
-                                        }
-                                    },
-                                    x: {
-                                        ticks: {
-                                            color: "rgba(0, 0, 0, 0.7)",
-                                            font: {
-                                                size: 11
-                                            }
-                                        },
-                                        grid: {
-                                            color: "rgba(0, 0, 0, 0.1)"
-                                        }
-                                    }
-                                }
-                            }}
-                        />
-                    </div>
-                    </div>
+                                }}
+                            />
+                        </div>
+                    </div> */}
                 </>
             )}
         </div>
