@@ -62,7 +62,10 @@ export default function Dashboard() {
 
     useEffect(() => {
         const token = getToken();
-        if (!token) {
+        const storedUsername = getCookie("username");
+
+        // Validate user is authorized for this dashboard
+        if (!token || storedUsername === "afzal") {
             router.replace("/");
         } else {
             setAuthorized(true);
@@ -75,6 +78,13 @@ export default function Dashboard() {
             .split("; ")
             .find((row) => row.startsWith("userKey="))
             ?.split("=")[1];
+
+    const getCookie = (name) => {
+        return document.cookie
+            .split("; ")
+            .find((row) => row.startsWith(`${name}=`))
+            ?.split("=")[1];
+    };
 
 
 
@@ -157,6 +167,7 @@ export default function Dashboard() {
 
                 if (res.status === 401 || res.status === 403) {
                     document.cookie = "userKey=; Max-Age=0; path=/";
+                    document.cookie = "username=; Max-Age=0; path=/";
                     router.replace("/");
                     return null;
                 }
@@ -194,6 +205,7 @@ export default function Dashboard() {
 
     const handleLogout = () => {
         document.cookie = "userKey=; Max-Age=0; path=/";
+        document.cookie = "username=; Max-Age=0; path=/";
         router.replace("/");
     };
 
