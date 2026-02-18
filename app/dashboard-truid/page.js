@@ -95,8 +95,9 @@ export default function Dashboard() {
 
         const clients = ["1", "2", "3"];
 
-        try {
-            const fetchPromises = clients.map(async (clientId) => {
+        // Create fetch function for each client
+        const fetchClientData = async (clientId) => {
+            try {
                 const res = await fetch(
                     "https://trueidmapp.askaribank.com.pk/services-count/",
                     {
@@ -127,25 +128,30 @@ export default function Dashboard() {
 
                 const result = await res.json();
                 return { clientId, data: result };
-            });
+            } catch (err) {
+                console.error(`Error fetching client ${clientId}:`, err);
+                return null;
+            }
+        };
 
-            const results = await Promise.all(fetchPromises);
+        // Launch all requests in parallel and update UI as each completes
+        const fetchPromises = clients.map(async (clientId) => {
+            const result = await fetchClientData(clientId);
+            // Update state immediately when this client's data arrives
+            if (result && result.data) {
+                setClientsData(prev => ({ ...prev, [result.clientId]: result.data }));
+                setClientsLoading(prev => ({ ...prev, [result.clientId]: false }));
+            } else {
+                setClientsLoading(prev => ({ ...prev, [clientId]: false }));
+            }
+            return result;
+        });
 
-            // Update all clients data at once
-            const newClientsData = { 1: null, 2: null, 3: null };
-            results.forEach(result => {
-                if (result && result.clientId) {
-                    newClientsData[result.clientId] = result.data;
-                }
-            });
-            setClientsData(newClientsData);
-            setClientsLoading({ 1: false, 2: false, 3: false });
+        // Wait for all to complete
+        await Promise.allSettled(fetchPromises);
 
-        } catch (err) {
-            console.error("Fetch failed:", err);
-            setClientsLoading({ 1: false, 2: false, 3: false });
-        }
-
+        // Ensure all loading states are cleared
+        setClientsLoading({ 1: false, 2: false, 3: false });
         setFetchingDisabled(false);
     };
 
@@ -331,12 +337,12 @@ function FunnelVisualization({ title, data }) {
 
     // Prepare funnel chart data with drop-off calculations
     const funnelChartData = [
-        { 
-            name: "Total Applications", 
-            value: data.totalCount, 
-            fill: "#2255FF", 
-            dropOffPercentage: null, 
-            dropOffCount: null 
+        {
+            name: "Total Applications",
+            value: data.totalCount,
+            fill: "#2255FF",
+            dropOffPercentage: null,
+            dropOffCount: null
         },
         ...data.services.map((service, index) => ({
             name: formatName(service.name),
@@ -398,9 +404,13 @@ function FunnelVisualization({ title, data }) {
         xaxis: {
             categories: dropOffChartData.map(item => item.stage),
             labels: {
-                formatter: function(val) {
-                    return val.toLocaleString();
-                }
+                show: false
+            },
+            axisBorder: {
+                show: false
+            },
+            axisTicks: {
+                show: false
             }
         },
         yaxis: {
@@ -408,14 +418,14 @@ function FunnelVisualization({ title, data }) {
                 style: {
                     fontSize: '12px'
                 },
-                formatter: function(val) {
+                formatter: function (val) {
                     return val.length > 18 ? val.substring(0, 18) + '...' : val;
                 }
             }
         },
         tooltip: {
             y: {
-                formatter: function(val) {
+                formatter: function (val) {
                     return val.toLocaleString();
                 }
             }
@@ -538,18 +548,19 @@ function FunnelVisualization({ title, data }) {
                                 },
                                 dataLabels: {
                                     enabled: true,
-                                    formatter: function(val, opt) {
+                                    formatter: function (val, opt) {
                                         const dataIndex = opt.dataPointIndex;
                                         const item = funnelChartData[dataIndex];
+                                        const name = item.name;
                                         const value = item.value.toLocaleString();
-                                        const dropOffText = item.dropOffPercentage && parseFloat(item.dropOffPercentage) > 0 
+                                        const dropOffText = item.dropOffPercentage && parseFloat(item.dropOffPercentage) > 0
                                             ? ` | ↓ ${item.dropOffPercentage}% (${item.dropOffCount.toLocaleString()} lost)`
                                             : '';
-                                        return value + dropOffText;
+                                        return name + ': ' + value + dropOffText;
                                     },
                                     offsetY: 0,
                                     style: {
-                                        fontSize: '14px',
+                                        fontSize: '13px',
                                         fontWeight: 'bold',
                                         colors: ['#fff']
                                     },
@@ -563,18 +574,14 @@ function FunnelVisualization({ title, data }) {
                                 },
                                 colors: funnelChartData.map(item => item.fill),
                                 xaxis: {
-                                    categories: funnelChartData.map(item => item.name),
                                     labels: {
                                         show: false
                                     }
                                 },
                                 yaxis: {
+                                    categories: funnelChartData.map(item => item.name),
                                     labels: {
-                                        style: {
-                                            fontSize: '14px',
-                                            fontWeight: 600,
-                                            colors: ['#333']
-                                        }
+                                        show: false
                                     }
                                 },
                                 legend: {
@@ -583,7 +590,7 @@ function FunnelVisualization({ title, data }) {
                                 tooltip: {
                                     enabled: true,
                                     y: {
-                                        formatter: function(val, opt) {
+                                        formatter: function (val, opt) {
                                             const dataIndex = opt.dataPointIndex;
                                             const item = funnelChartData[dataIndex];
                                             let tooltipText = item.value.toLocaleString();
@@ -593,7 +600,7 @@ function FunnelVisualization({ title, data }) {
                                             return tooltipText;
                                         },
                                         title: {
-                                            formatter: function(seriesName) {
+                                            formatter: function (seriesName) {
                                                 return 'Count';
                                             }
                                         }
