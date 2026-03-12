@@ -223,6 +223,7 @@ export default function Dashboard() {
                         total: 0,
                         verified: 0,
                         notVerified: 0,
+                        pending: 0,
                         clients: {}
                     };
                 }
@@ -230,13 +231,17 @@ export default function Dashboard() {
                 const verified = serviceData?.verfied ?? serviceData?.verified ?? 0;
                 const notVerified = serviceData?.not_verified ?? 0;
                 const total = serviceData?.total ?? 0;
+                // Check for both 'pending' (lowercase) and 'Pending' (capital P)
+                const pending = serviceData?.pending ?? serviceData?.Pending ?? 0;
 
                 servicesMap[serviceName].total += total;
                 servicesMap[serviceName].verified += verified;
                 servicesMap[serviceName].notVerified += notVerified;
+                servicesMap[serviceName].pending += pending;
                 servicesMap[serviceName].clients[clientId] = {
                     verified,
                     notVerified,
+                    pending,
                     total
                 };
             });
@@ -256,7 +261,7 @@ export default function Dashboard() {
             if (clientData) {
                 totalCount += clientData.total_count || 0;
                 verifiedCount += clientData.verfied || clientData.verified || 0;
-                notVerifiedCount += clientData.not_verified || 0;
+                notVerifiedCount += (clientData.not_verified ?? 0) + (clientData?.pending ?? 0);
             }
         });
 
@@ -507,7 +512,7 @@ function ServiceBreakdown({ serviceName, serviceData }) {
             <div className="kpi-grid">
                 <Kpi title="Total Count" value={serviceData.total} />
                 <Kpi title="Verified" value={serviceData.verified} />
-                <Kpi title="Not Verified" value={serviceData.notVerified} />
+                <Kpi title="Not Verified" value={serviceData.notVerified + (serviceData.pending ?? 0)} />
             </div>
 
             {/* Client Breakdown */}
@@ -536,7 +541,7 @@ function ServiceBreakdown({ serviceName, serviceData }) {
                                     </div>
                                     <div className="stat-row">
                                         <span className="stat-label">Not Verified:</span>
-                                        <span className="stat-value stat-not-verified">{clientServiceData.notVerified}</span>
+                                        <span className="stat-value stat-not-verified">{clientServiceData.notVerified + (clientServiceData.pending ?? 0)}</span>
                                     </div>
                                     <div className="progress-bar">
                                         <div
